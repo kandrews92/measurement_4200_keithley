@@ -2,6 +2,7 @@ import xlrd
 import xlwt
 import scipy.constants as scc
 import openpyxl
+from xlutils.copy import copy as xl_copy
 import numpy as np 
 import matplotlib.pyplot as plt
 import matplotlib as mpl
@@ -31,7 +32,7 @@ class Measurement:
     For a brief description of each class method see each method's
     docstring. 
     """
-    def __init__(self, filename):
+    def __init__(self, filename, width=1.0, length=1.0):
         # string of excel file
         self.filename = filename 
         # workbook associated with filename
@@ -58,6 +59,21 @@ class Measurement:
             self.settings_sheet = self.workbook.sheet_by_index(2)
         except AttributeError:
             self.settings_sheet  = None
+        self.width = width 
+        self.length = length
+    
+    def width(self):
+        """ Called to get the width of the device 
+        """
+        return self.width
+
+    def length(self):
+        """ Called to get the length of the device
+        """
+        return self.length
+
+    def write_analysis(self):
+        pass
     
     def __repr__(self):
         """ Called when user prints instance of class, mainly in 
@@ -160,17 +176,52 @@ class Measurement:
         except AttributeError:
             return None
 
-    def gate_voltage(self):
+    def gate_voltage(self, index=None):
         """ Called to get the gate voltage for the measurement
+
+        Parameters
+        ----------
+        index : int
+            this allows for accessing of a single item of the voltage
+            array without having to loop. for example:
+                self.gate_voltage(0) would give the first voltage value
+            default value is none, in this case it will return the 
+            entire array of current
         """
-        voltages = []
+        voltage = []
+        # check that the data exists, if not return None
         if self.__cols() != None:
-            for col in range( self.__cols() ):
-                if self.data_sheet.cell_value( 0, col ) == "GateV":
-                    # start at 1 because row 0 is the doc headers
-                    for row in range( 1, self.__rows() ):
-                        voltages.append( self.data_sheet.cell_value( row, col ) )
-            return voltages
+            # find the column that contains 'GateV'
+            for i in range( self.__cols() ):
+                if self.data_sheet.cell_value( 0, i ) == "GateV":
+                    col = i
+            # if a specific index is not given then return all the 
+            # voltage values as an array
+            if index == None:
+                # start at 1 because row 0 in the sheet holds 
+                # the headers
+                for row in range( 1, self.__rows() ):
+                    voltage.append( self.data_sheet.cell_value( row, col ) )
+                return voltage
+            # if a specific index is given
+            elif type(index) == int:
+                if index >= 0 and index <= self.__rows():
+                    # index + 1 beacuse the first row of the sheet
+                    # is the column headers. When reading data the 
+                    # value will actually be row + 1 of the index
+                    return self.data_sheet.cell_value( index + 1, col )
+                # reverse index the array
+                # e.g. array[-1] = last item, array[-2] = second last item
+                elif index < 0:
+                    return self.data_sheet.cell_value( self.__rows() + index, col )
+                # index is out of bounds
+                else:
+                    print "Index is out of bounds"
+                    return None
+            # if index is not None and also not an int
+            else:
+                return None
+        # sheet does not exist
         else:
             return None
 
@@ -209,7 +260,17 @@ class Measurement:
             4) "mA" = milliAmperes
         """
         current = [] 
-        suffix = ['A', 'nA', 'uA', 'mA'] # units allowed 
+        # tuple of units and corresponding multiplication factor
+        suffix = ( ('A',1.0), ('nA',1e9), ('uA',1e6), ('mA',1e3) ) 
+        # compare the units factor to the units argument and set
+        # the multiplaction factor
+        for pair in range( len(suffix) ):
+            # compare units argument to the tuple pairs' first 
+            # argument
+            if units == suffix[pair][0]:
+                # set the multiplication factor to the tuple pairs'
+                # second argument
+                factor = suffix[pair][1]
         # check that the data exists, if not return None
         if self.__cols() != None: 
             # find the column that contains the DrainI 
@@ -222,7 +283,7 @@ class Measurement:
                 # start at 1 because row 0 in the sheet holds 
                 # the headers
                 for row in range( 1, self.__rows() ):
-                    current.append( self.data_sheet.cell_value( row, col ) )
+                    current.append( self.data_sheet.cell_value( row, col ) * factor )
                 return current
             # if a specific index is given
             elif type(index) == int:
@@ -230,11 +291,11 @@ class Measurement:
                     # index + 1 beacuse the first row of the sheet
                     # is the column headers. When reading data the 
                     # value will actually be row + 1 of the index
-                    return self.data_sheet.cell_value( index + 1, col )
-                # get the last item in the array. works like 
-                # array[-1] indexing
-                elif index == -1:
-                    return self.data_sheet.cell_value( self.__rows() - 1, col )
+                    return self.data_sheet.cell_value( index + 1, col ) * factor
+                # reverse index the array
+                # e.g. array[-1] = last item, array[-2] = second last item
+                elif index < 0:
+                    return self.data_sheet.cell_value( self.__rows() + index, col ) * factor
                 # index is out of bounds
                 else:
                     print "Index is out of bounds"
@@ -245,57 +306,19 @@ class Measurement:
         # no data sheet exists
         else:
             return None
-        """
-        current = []
-        suffix = ['A', 'nA', 'uA', 'mA'] # units allowed 
-        if self.__cols() != None and index == None:
-            for col in range( self.__cols() ):
-                # start at 1 because row 0 is the doc headers
-                if self.data_sheet.cell_value( 0, col ) == "DrainI":
-                    for row in range( 1, self.__rows() ):
-                        if units == "A":
-                            current.append( self.data_sheet.cell_value( row, col ) ) 
-                        elif units == "nA":
-                            current.append( self.data_sheet.cell_value( row, col ) * 1e9 )
-                        elif units == "uA":
-                            current.append( self.data_sheet.cell_value( row, col ) * 1e6 )
-                        elif units == "mA":
-                            current.append( self.data_sheet.cell_value( row, col ) * 1e3 )
-                        else:
-                            print "Invalid unit parameter"
-            return current
-        # index value is not None type 
-        elif self.__cols() != None and type(index) == int:
-            # check index values
-            if index >= 0 and index <= self.__rows():
-                for col in range( self.__cols() ):
-                    if self.data_sheet.cell_value( 0, col ) == "DrainI":
-                        # index + 1 beacuse the first row of the sheet
-                        # is the column headers. When reading data the 
-                        # value will actually be row + 1 of the index
-                        return self.data_sheet.cell_value( index+1, col )
-            # get the last item in the array. works like array[-1] indexing
-            elif index == -1:
-                for col in range( self.__cols() ):
-                    if self.data_sheet.cell_value( 0, col ) == "DrainI":
-                        return self.data_sheet.cell_value( self.__rows()-1, col )
-            # index out of bounds
-            else: 
-                print "Index out of bounds"
-                return None
-        # index value is wrong type
-        elif self.__cols() != None and type(index) != int:
-            return None
-        else:
-            return None
-        """
 
-    def lnT_current(self, order=1.5):
+    def lnT_current(self, index=None, order=1.5):
         """ Called to get the current at each gate voltage value in the form 
         of Ln( I / T^(order) )
 
         Parameters
         ----------
+        index : int or None
+            this allows for accessing of a single item of the lnT_current
+            array without having to loop. for example:
+                self.lnT_current(0) would give the first lnT_current value
+            default value is none, in this case it will return the 
+            entire array of lnT_current 
         order : float
             order to which the temperature should be taken. default value 
             is 3/2. Other possible value is 2.0
@@ -317,7 +340,7 @@ class Measurement:
         except TypeError:
             return None
 
-    def abs_normalized_current(self, width=1.0):
+    def abs_normalized_current(self):
         """ Called to get the absolute value of the current divided by
         the width of the channel
         
@@ -327,11 +350,11 @@ class Measurement:
             width of the device channel
         """
         try:
-            return [ x / width for x in map(abs, self.current()) ]
+            return [ x / self.width for x in map(abs, self.current()) ]
         except TypeError:
             return None
 
-    def normalize_current(self, width=1.0):
+    def normalize_current(self):
         """ Called to get the current divided by the width of the 
         channel
 
@@ -341,11 +364,11 @@ class Measurement:
             width of the device channel
         """
         try:
-            return [ x / width for x in self.current() ]
+            return [ x / self.width for x in self.current() ]
         except TypeError:
             return None
 
-    def conductivity(self, length, width):
+    def conductivity(self):
         """ Called to get the conductivity in uS, where
         S = I/Vds * L/W
 
@@ -357,13 +380,10 @@ class Measurement:
             width of the device channel
         """
         if self.test_name() == "vgs-id":
-            return [ x * (1.0e6/self.drain_voltage()) * length/width
+            return [ x * (1.0e6/self.drain_voltage()) * self.length/self.width
                     for x in self.current() ]
         else:
             return None
-
-    def to_calc_sheet(self):
-        pass
     
     def __set_plot_params(self):
         """ Called from plotting functions to reset the parameters
@@ -394,11 +414,10 @@ class Measurement:
             if axis_type == "log":
                 plt.ylabel(r"$I_{ds}\,(\mathrm{A})$", fontsize=14)
                 plt.semilogy(self.gate_voltage(), self.current())
-            # if it is a linear plot, current will be in microAmps,
-            # nanoAmps, or milliAmps
+            # if it is a linear plot, current will be in microAmps
             elif axis_type == "linear":
                 plt.ylabel(r"$I_{ds}\,(\mu\mathrm{A})$", fontsize=14)
-                plt.plot(self.gate_voltage(), self.current("uA"))
+                plt.plot(self.gate_voltage(), self.current(units="uA"))
             else:
                 print "Invalid axis type"
             plt.tight_layout()
@@ -409,8 +428,34 @@ class Measurement:
         else:
             return None
     
-    def plot_conductivity(self, axis_type, save_name=""):
-        pass
+    def plot_conductivity(self, save_name=""):
+        """ Called to plot the transfer curve for a data set
+
+        Parameters
+        ----------
+        axis_type : string
+            denotes whether the plot should semilogy or linear
+            options are axis_type="log" or axis_type="linear"
+        save_name : string
+            denotes the name for which the plot should be save as pdf
+            to, default to empty string and it will not save the plot
+            in this case, rather it will just call plt.show()
+        """
+        # check to make sure current has values
+        if self.current() and self.gate_voltage() is not None:
+            # set plot parameters to default
+            self.__set_plot_params()
+            # x-label will always be gate voltage
+            plt.xlabel(r"$V_{gs}\,(\mathrm{V})$", fontsize=14)
+            plt.ylabel(r"$\sigma_{2D}\,(\mu\mathrm{S})$", fontsize=14)
+            plt.plot(self.gate_voltage(), self.conductivity())
+            plt.tight_layout()
+            if save_name == "":
+                plt.show()
+            else:
+                plt.savefig(save_name+".pdf")
+        else:
+            return None   
 
     
 class SBH(Measurement):
