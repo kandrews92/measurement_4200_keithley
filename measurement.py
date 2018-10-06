@@ -208,6 +208,44 @@ class Measurement:
             3) "uA" = microAmperes
             4) "mA" = milliAmperes
         """
+        current = [] 
+        suffix = ['A', 'nA', 'uA', 'mA'] # units allowed 
+        # check that the data exists, if not return None
+        if self.__cols() != None: 
+            # find the column that contains the DrainI 
+            for i in range( self.__cols() ):
+                if self.data_sheet.cell_value( 0, i ) == "DrainI":
+                    col = i
+            # if a specific index is not given then return all the 
+            # current values as an array
+            if index == None:
+                # start at 1 because row 0 in the sheet holds 
+                # the headers
+                for row in range( 1, self.__rows() ):
+                    current.append( self.data_sheet.cell_value( row, col ) )
+                return current
+            # if a specific index is given
+            elif type(index) == int:
+                if index >= 0 and index <= self.__rows():
+                    # index + 1 beacuse the first row of the sheet
+                    # is the column headers. When reading data the 
+                    # value will actually be row + 1 of the index
+                    return self.data_sheet.cell_value( index + 1, col )
+                # get the last item in the array. works like 
+                # array[-1] indexing
+                elif index == -1:
+                    return self.data_sheet.cell_value( self.__rows() - 1, col )
+                # index is out of bounds
+                else:
+                    print "Index is out of bounds"
+                    return None
+            # if index is not None and also not an int
+            else:
+                return None
+        # no data sheet exists
+        else:
+            return None
+        """
         current = []
         suffix = ['A', 'nA', 'uA', 'mA'] # units allowed 
         if self.__cols() != None and index == None:
@@ -250,6 +288,7 @@ class Measurement:
             return None
         else:
             return None
+        """
 
     def lnT_current(self, order=1.5):
         """ Called to get the current at each gate voltage value in the form 
