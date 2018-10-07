@@ -17,7 +17,7 @@ def list_dir( extension=".xls", path="."):
     files = []; file_prefix = ['vgs-id', 'vds-id']
     # search other all files in current path
     for file in os.listdir( path ):
-        if file.endswith( extension ):
+        if file.endswith( extension ) and "analyzed" not in file:
             # if it is a .xls file, then search the prefix list
             for prefix in file_prefix:
                 if prefix in file:
@@ -31,7 +31,7 @@ if __name__ == "__main__":
     # each element is a different measurement
     measurements = [ Measurement(file) for file in files ]
     x = Measurement(files[1])
-    print x.drain_voltage()
+    x.write_analysis()
     #sbh = SBH(measurements)
 
     

@@ -1,12 +1,11 @@
 import xlrd
 import xlwt
-import scipy.constants as scc
-import openpyxl
-from xlutils.copy import copy as xl_copy
+import scipy.constants as sc
 import numpy as np 
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from collections import OrderedDict
+
 
 class Measurement:
     """ Class that manipulates excel files produced from measurements
@@ -31,6 +30,11 @@ class Measurement:
     
     For a brief description of each class method see each method's
     docstring. 
+
+    Basic usage, assuming filename 'test.xls'
+    >>> x = Measurement('test.xls')
+    >>> x.current() # prints all the currents
+    >>> x.write_analysis() # write all analysis to file
     """
     def __init__(self, filename, width=1.0, length=1.0):
         # string of excel file
@@ -73,9 +77,86 @@ class Measurement:
         return self.length
 
     def write_analysis(self):
-        # TODO
-        pass
+        """ Called to write the measurement data and some data 
+        analysis to an excel file
+        """
+        # get the current workbook and the data sheet
+        # self.data_sheet cannot be used, because that references the 
+        # place in memory but not the actual sheet
+        wb = xlrd.open_workbook(self.filename)
+        # data sheet 
+        sheet = wb.sheet_by_index(0)
+        if self.test_name() == 'vgs-id':
+            # initalize a 2D array to store all the data that will 
+            # be copied over
+            data = [ [] for col in range( self.__cols() ) ]
+            # get each row and column of the initial data from 
+            # the measurement
+            for col in range( self.__cols() ):
+                # self.__rows() works here because we want to use the 
+                # total number of rows in the sheet including the headers
+                for row in range( self.__rows() ):
+                    data[col].append( sheet.cell_value( row, col ) )
+            # headers of analyzed data
+            new_headers = ["S (uS) "+str(self.drain_voltage())
+                +"V "+str(self.temperature())+"K", "Norm Ids (A/um) "+
+                str(self.drain_voltage())+"V "+str(self.temperature() )+
+                "K"]
+            # analyzed data to be added to the sheet
+            new_data = [ [] for col in range( len( new_headers ) ) ]
+            # populate new_data with conductivity and the norm current
+            for col in range( len( new_headers ) ):
+                new_data[col].append( new_headers[col] )
+                if col == 0:
+                    # use len( self.conductivity() ) because 
+                    # self.__rows() = self.conductivity() + 1
+                    # self.__rows() includes the length with the original header
+                    # included, so self.__rows() would throw an index error
+                    for row in range( len( self.conductivity() ) ):
+                        new_data[col].append( self.conductivity( row ) )
+                elif col == 1:
+                    # use len( self.normalized_current() ) because 
+                    # self.__rows() = self.normalized_current() + 1
+                    # self.__rows() includes the length with the original header
+                    # included, so self.__rows() would throw an index error
+                    for row in range( len(self.normalized_current() ) ):
+                        new_data[col].append( self.normalized_current( row ) )
+            # clean up the microamps drain current header to include
+            # drain voltage and temperature
+            self.__replace_header(data, "IDS_UA", "Ids (uA) "+str(self.drain_voltage())
+                +"V "+str(self.temperature())+"K" )
+            # clean up the abs ids current header to include 
+            # drain voltage and temperature
+            self.__replace_header(data, "ABS_IDS", "ABS Ids (A) "+str(self.drain_voltage())
+                +"V "+str(self.temperature())+"K") 
+            # concatenate old data with the analyzed data 
+            data += new_data
+            # initialize new workbook for writing
+            new_book = xlwt.Workbook()
+            # add sheet
+            new_sheet = new_book.add_sheet("Analyzed Data")
+            print len(data), len(data[0])
+            # number of columns is len(data)
+            for col in range( len( data ) ):
+                # number of rows is len(data[0]) because the array
+                # is not jagged
+                for row in range( len( data[0] ) ):
+                    new_sheet.write( row, col, data[col][row] )
+            # save the book with a file name that is the same as 
+            # self.file name with an 'analyzed' added
+            new_book.save(self.__strip_excel()+"_analyzed.xls")
     
+    def __strip_excel(self):
+        """ Called to strip the .xls extension from self.filename
+        """
+        return self.filename[:-4]
+
+    def __replace_header(self, array, old_str, replace_str):
+        for col in range( len(array) ):
+            if array[col][0] == old_str:
+                array[col][0] = replace_str
+        
+                
     def __repr__(self):
         """ Called when user prints instance of class, mainly in 
         interactive environment, e.g. 
@@ -429,7 +510,7 @@ class Measurement:
 
     def normalized_current(self, index=None):
         """ Called to get the current divided by the width of the 
-        channel
+        channel in Amps
 
         Parameters
         ----------
@@ -484,12 +565,12 @@ class Measurement:
         """
         mpl.rcParams.update(mpl.rcParamsDefault)
 
-    def plot_transfer(self, axis_type, save_name=""):
+    def plot_transfer(self, axis, save_name=""):
         """ Called to plot the transfer curve for a data set
 
         Parameters
         ----------
-        axis_type : string
+        axis : string
             denotes whether the plot should semilogy or linear
             options are axis_type="log" or axis_type="linear"
         save_name : string
@@ -506,11 +587,11 @@ class Measurement:
                 # x-label will always be gate voltage
                 plt.xlabel(r"$V_{gs}\,(\mathrm{V})$", fontsize=14)
                 # if it is logY plot, current will be in amps
-                if axis_type == "log":
+                if axis == "log":
                     plt.ylabel(r"$I_{ds}\,(\mathrm{A})$", fontsize=14)
                     plt.semilogy(self.gate_voltage(), self.current())
                 # if it is a linear plot, current will be in microAmps
-                elif axis_type == "linear":
+                elif axis == "linear":
                     plt.ylabel(r"$I_{ds}\,(\mu\mathrm{A})$", fontsize=14)
                     plt.plot(self.gate_voltage(), self.current(units="uA"))
                 else:
