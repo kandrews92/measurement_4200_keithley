@@ -115,7 +115,7 @@ class Measurement:
         this is located in the first row and second column
 
         Ex: test name = vgs-id#1@1
-        Strips everything but the vgs-id, or vds-id elements
+        Strips everything but the vgs-id, or vds-id, or res2t elements
         """
         try:
             return str(self.settings_sheet.cell_value(0,1)[:6])
@@ -146,6 +146,8 @@ class Measurement:
             return int(self.settings_sheet.cell_value(17,3))
         if self.test_name() == "vds-id":
             return int(self.settings_sheet.cell_value(17,2))
+        if self.test_name() == 'res2t':
+            pass
     
     def gate_step_size(self):
         """ Called to get the gate step size in the measurement
@@ -323,50 +325,109 @@ class Measurement:
             order to which the temperature should be taken. default value 
             is 3/2. Other possible value is 2.0
         """
-        try:
-            return [ np.log( x / ( scc.k * self.temperature()**order ) )
-                    for x in self.current() ]  
-        except TypeError:
-            return None
-        except NameError:
-            print "package: Numpy or scipy.constants not imported"
+        # check for correct measurement type
+        if self.test_name() == 'vgs-id':
+            lnT = [] 
+            # if a specific index is not given then return all the 
+            # lnT_current values as an array
+            if index == None:
+                # To check whether it is n-type or p-type, we use the 
+                # last current value. (if > 0 then p-type, and 
+                # if < 0 then n-type)
+                # n-type device, and we should make any negative value
+                # equal to zero so as not to cause NaN in log values
+                if self.current(-1) > 0:
+                    for i in range( len( self.current() ) ):
+                        # current is real, calculate lnT
+                        if self.current(i) > 0:
+                            lnT.append( np.log( self.current(i) /
+                                ( scc.k * self.temperature() ** order ) ) )
+                        # current is not real, skip it
+                        elif self.current(i) <= 0:
+                            lnT.append( 0.0 )
+                # p-type device, and we should take the absolute value
+                # of the current values in order to take log of the 
+                # current values.
+                # In this case, if the current is negative then it is 
+                # considered a 'real' current and should be used, if the
+                # current is positive, then it is an 'artifact' and 
+                # should not be considered. This elif also checks this.
+                elif self.current(-1) < 0:
+                    for i in range( len( self.current() ) ):
+                        # current is real, calculate lnT
+                        if self.current(i) < 0:
+                            lnT.append( np.log( abs( self.current(i) ) / 
+                                ( scc.k * self.temperature() ** order ) ) )
+                        # current is not real, skip it
+                        elif self.current(i) >= 0:
+                            lnT.append( 0.0 )
+                return lnT
+            # index is given as integer
+            elif type(index) == int:
+                # index + 1 beacuse the first row of the sheet
+                # is the column headers. When reading data the 
+                # value will actually be row + 1 of the index
+                curr = self.current( index ) 
+                return np.log( self.current(index) / 
+                        ( scc.k * self.temperature() ** order ) ) 
+            # index error, it is not int or None type
+            else:
+                return None
+        # not correct measurement type
+        else: 
             return None
 
-    def abs_current(self):
+    def abs_current(self, index=None):
         """ Called to get the absolute value of the current values in Amps
-        """
-        try:
-            return map(abs, self.current())
-        except TypeError:
-            return None
 
-    def abs_normalized_current(self):
+        Parameters
+        ----------
+        index : int or None
+        """
+        # check measurement type
+        if self.test_name() == 'vgs-id':
+            try:
+                return map(abs, self.current())
+            except TypeError:
+                return None
+        # wrong measurement type
+        else:
+            return None 
+
+    def abs_normalized_current(self, index=None):
         """ Called to get the absolute value of the current divided by
         the width of the channel
         
         Parameters
         ----------
-        width : float
-            width of the device channel
+        index : int or None
         """
-        try:
-            return [ x / self.width for x in map(abs, self.current()) ]
-        except TypeError:
-            return None
-
-    def normalize_current(self):
+        # check measurement type
+        if self.test_name() == 'vgs-id':
+            try:
+                return [ x / self.width for x in map(abs, self.current()) ]
+            except TypeError:
+                return None
+        # wrong measurement type
+        else:
+            return None 
+    def normalized_current(self, index=None):
         """ Called to get the current divided by the width of the 
         channel
 
         Parameters
         ----------
-        width : float
-            width of the device channel
+        index : int or None
         """
-        try:
-            return [ x / self.width for x in self.current() ]
-        except TypeError:
-            return None
+        # check for measurement type
+        if self.test_name() == 'vgs-id':
+            try:
+                return [ x / self.width for x in self.current() ]
+            except TypeError:
+                return None
+        # wrong measurement type
+        else:
+            return None 
 
     def conductivity(self):
         """ Called to get the conductivity in uS, where
@@ -379,9 +440,11 @@ class Measurement:
         width : float
             width of the device channel
         """
+        # check for correct measurement type
         if self.test_name() == "vgs-id":
             return [ x * (1.0e6/self.drain_voltage()) * self.length/self.width
                     for x in self.current() ]
+        # wrong measurement type
         else:
             return None
     
@@ -404,29 +467,37 @@ class Measurement:
             to, default to empty string and it will not save the plot
             in this case, rather it will just call plt.show()
         """
-        # check to make sure current has values
-        if self.current() and self.gate_voltage() is not None:
-            # set plot parameters to default
-            self.__set_plot_params()
-            # x-label will always be gate voltage
-            plt.xlabel(r"$V_{gs}\,(\mathrm{V})$", fontsize=14)
-            # if it is logY plot, current will be in amps
-            if axis_type == "log":
-                plt.ylabel(r"$I_{ds}\,(\mathrm{A})$", fontsize=14)
-                plt.semilogy(self.gate_voltage(), self.current())
-            # if it is a linear plot, current will be in microAmps
-            elif axis_type == "linear":
-                plt.ylabel(r"$I_{ds}\,(\mu\mathrm{A})$", fontsize=14)
-                plt.plot(self.gate_voltage(), self.current(units="uA"))
+        # check for correct measurement type
+        if self.test_name() == "vgs-id":
+            # check to make sure current has values
+            if self.current() and self.gate_voltage() is not None:
+                # set plot parameters to default
+                self.__set_plot_params()
+                # x-label will always be gate voltage
+                plt.xlabel(r"$V_{gs}\,(\mathrm{V})$", fontsize=14)
+                # if it is logY plot, current will be in amps
+                if axis_type == "log":
+                    plt.ylabel(r"$I_{ds}\,(\mathrm{A})$", fontsize=14)
+                    plt.semilogy(self.gate_voltage(), self.current())
+                # if it is a linear plot, current will be in microAmps
+                elif axis_type == "linear":
+                    plt.ylabel(r"$I_{ds}\,(\mu\mathrm{A})$", fontsize=14)
+                    plt.plot(self.gate_voltage(), self.current(units="uA"))
+                else:
+                    print "Invalid axis type"
+                plt.tight_layout()
+                if save_name == "":
+                    plt.show()
+                else:
+                    plt.savefig(save_name+".pdf")
             else:
-                print "Invalid axis type"
-            plt.tight_layout()
-            if save_name == "":
-                plt.show()
-            else:
-                plt.savefig(save_name+".pdf")
+                return None
+        # wrong measurement type
         else:
             return None
+
+    def plot_normalized_transfer(self):
+        pass
     
     def plot_conductivity(self, save_name=""):
         """ Called to plot the transfer curve for a data set
@@ -441,22 +512,26 @@ class Measurement:
             to, default to empty string and it will not save the plot
             in this case, rather it will just call plt.show()
         """
-        # check to make sure current has values
-        if self.current() and self.gate_voltage() is not None:
-            # set plot parameters to default
-            self.__set_plot_params()
-            # x-label will always be gate voltage
-            plt.xlabel(r"$V_{gs}\,(\mathrm{V})$", fontsize=14)
-            plt.ylabel(r"$\sigma_{2D}\,(\mu\mathrm{S})$", fontsize=14)
-            plt.plot(self.gate_voltage(), self.conductivity())
-            plt.tight_layout()
-            if save_name == "":
-                plt.show()
+        # check for correct measurement type
+        if self.test_name() == 'vgs-id':
+            # check to make sure current has values
+            if self.current() and self.gate_voltage() is not None:
+                # set plot parameters to default
+                self.__set_plot_params()
+                # x-label will always be gate voltage
+                plt.xlabel(r"$V_{gs}\,(\mathrm{V})$", fontsize=14)
+                plt.ylabel(r"$\sigma_{2D}\,(\mu\mathrm{S})$", fontsize=14)
+                plt.plot(self.gate_voltage(), self.conductivity())
+                plt.tight_layout()
+                if save_name == "":
+                    plt.show()
+                else:
+                    plt.savefig(save_name+".pdf")
             else:
-                plt.savefig(save_name+".pdf")
+                return None   
+        # wrong measurement type
         else:
-            return None   
-
+            return None
     
 class SBH(Measurement):
     def __init__(self, *files):
