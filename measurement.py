@@ -73,6 +73,7 @@ class Measurement:
         return self.length
 
     def write_analysis(self):
+        # TODO
         pass
     
     def __repr__(self):
@@ -160,7 +161,10 @@ class Measurement:
     def drain_step_size(self):
         """ Called to get the drain step size in the measurement
         """
-        pass
+        # drain step size for 'vgs-id' = drain_voltage()
+        # drain voltage is held constant in this measurement
+        if self.test_name() == "vgs-id":
+            return self.drain_voltage()
 
     def __rows(self):
         """ Called to get the number of rows of the excel file
@@ -378,7 +382,8 @@ class Measurement:
             return None
 
     def abs_current(self, index=None):
-        """ Called to get the absolute value of the current values in Amps
+        """ Called to get the absolute value of the current values 
+        Amps
 
         Parameters
         ----------
@@ -386,10 +391,15 @@ class Measurement:
         """
         # check measurement type
         if self.test_name() == 'vgs-id':
-            try:
-                return map(abs, self.current())
-            except TypeError:
-                return None
+            abs_current = []
+            # no index given, return entire array
+            if index == None:
+                for i in range( len( self.current() ) ):
+                    abs_current.append( self.current(i) )
+                return abs_current
+            # index is given, return single value
+            elif type(index) == int:
+                return abs( self.current(index) )
         # wrong measurement type
         else:
             return None 
@@ -404,13 +414,19 @@ class Measurement:
         """
         # check measurement type
         if self.test_name() == 'vgs-id':
-            try:
-                return [ x / self.width for x in map(abs, self.current()) ]
-            except TypeError:
-                return None
+            abs_norm_current = []
+            # no index given, return entire array
+            if index == None:
+                for i in range( len( self.current() ) ):
+                    abs_norm_current.append( abs(self.current(i))/self.width)
+                return abs_norm_current
+            # index is given, return single value
+            elif type(index) == int:
+                return abs(self.current(index))/self.width
         # wrong measurement type
         else:
             return None 
+
     def normalized_current(self, index=None):
         """ Called to get the current divided by the width of the 
         channel
@@ -421,29 +437,43 @@ class Measurement:
         """
         # check for measurement type
         if self.test_name() == 'vgs-id':
-            try:
-                return [ x / self.width for x in self.current() ]
-            except TypeError:
-                return None
+            norm_current = []
+            # no index given, return entire array
+            if index == None:
+                for i in range( len( self.current() ) ):
+                    norm_current.append( self.current(i)/self.width )
+                return norm_current
+            # index is given, return single value
+            elif type(index) == int:
+                return self.current(index)/self.width
         # wrong measurement type
         else:
             return None 
 
-    def conductivity(self):
+    def conductivity(self, index=None):
         """ Called to get the conductivity in uS, where
         S = I/Vds * L/W
 
         Parameters
         ----------
-        length : float
-            length of the device channel
-        width : float
-            width of the device channel
+        index : int or None
         """
         # check for correct measurement type
         if self.test_name() == "vgs-id":
-            return [ x * (1.0e6/self.drain_voltage()) * self.length/self.width
-                    for x in self.current() ]
+            conduct = []
+            # no index given, return entire array
+            if index == None:
+                for i in range( len( self.current() ) ):
+                    # current in microAmps, use units arg
+                    val = self.current(index=i, units='uA')
+                    val = ( val / self.drain_voltage() ) * ( self.length / self.width )
+                    conduct.append( val )
+                return conduct
+            # index given, return single value
+            elif type(index) == int:
+                val = self.current(index=index, units='uA')
+                val = ( val/self.drain_voltage() ) * ( self.length / self.width )
+                return val
         # wrong measurement type
         else:
             return None

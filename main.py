@@ -31,7 +31,7 @@ if __name__ == "__main__":
     # each element is a different measurement
     measurements = [ Measurement(file) for file in files ]
     x = Measurement(files[1])
-    print x.lnT_current(-1)
+    print x.drain_voltage()
     #sbh = SBH(measurements)
 
     
