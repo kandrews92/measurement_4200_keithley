@@ -3,6 +3,7 @@ import xlwt
 import scipy.constants as sc
 import numpy as np 
 import matplotlib.pyplot as plt
+import math
 import matplotlib as mpl
 from collections import OrderedDict
 
@@ -36,7 +37,7 @@ class Measurement:
     >>> x.current() # prints all the currents
     >>> x.write_analysis() # write all analysis to file
     """
-    def __init__(self, filename, width=1.0, length=1.0):
+    def __init__(self, filename, width=1.0, length=1.0, capacitance=1.0):
         # string of excel file
         self.filename = filename 
         # workbook associated with filename
@@ -63,8 +64,12 @@ class Measurement:
             self.settings_sheet = self.workbook.sheet_by_index(2)
         except AttributeError:
             self.settings_sheet  = None
+        # length in micrometers
         self.width = width 
+        # length in micrometers 
         self.length = length
+        # capacitance in F/cm^2
+        self.capacitance = capacitance 
     
     def width(self):
         """ Called to get the width of the device 
@@ -559,6 +564,68 @@ class Measurement:
         else:
             return None
     
+    def __get_voltage_val_index(self, val, epsilon=1e-1):
+        """ Called to get the index at which voltage array has a 
+        particular value. For example, if we want to know at which index 
+        self.gate_voltage() has a value of 0.0 this function would be 
+        called as:
+            self.__get_val_index( self.gate_voltage(), 0.0 )
+        Note this is a bit tricky because the gate_voltage does not 
+        hit exactly zero
+
+        Parameters
+        ----------
+        val : float or int
+            value that is to be searched for
+        """
+        start = round(self.min_gate_voltage(), 3)
+        stop = round(self.max_gate_voltage() , 3)
+        step = self.gate_step_size()
+        # index to be returned
+        index = 0
+        while start <= stop:
+            # check for convergence
+            if abs(start - val) < epsilon:
+                return index
+            # if not converged then update
+            else:
+                start += step
+                index += 1
+    
+    def reliability_factor(self, mu_linear):
+        """ Called to get the reliability factor where
+        r_lin = ((|I_ds^max| - |I_ds^0|)/|V_gs^max|)
+                ------------------------------------
+                ((|V_ds| * W * C * mu_linear) / L)
+        where 
+            |I_ds^max| = abs value of max current 
+            |I_ds^0| = abs value of current at V_gs = 0 V
+            |V_gs^max| = abs value of max gate voltage
+            |V_ds| = abs value of drain voltage
+            W = device width
+            L = device length
+            C = gate capacitance 
+            mu_linear = estimated linear mobility
+        returns a tuple of r_lin and mu_eff where 
+            mu_eff = r_lin * mu_linear
+        
+        Parameters
+        ----------
+        mu_linear : float
+            estimate linear mobility, found from linear fit
+        """
+        current_max = abs(self.current(-1))
+        current_0 = abs(self.current(self.__get_voltage_val_index(0.0)))
+        print current_0
+        gate_max = abs(self.gate_voltage(-1))
+        numer = (current_max - current_0)/gate_max
+        denom = (self.drain_voltage()*self.width*self.capacitance*mu_linear)/self.length
+        r_lin = numer/denom 
+        mu_eff = r_lin * mu_linear
+        return (r_lin, mu_eff)
+
+
+
     def __set_plot_params(self):
         """ Called from plotting functions to reset the parameters
         of matplotlib to default
@@ -607,8 +674,39 @@ class Measurement:
         else:
             return None
 
-    def plot_normalized_transfer(self):
-        pass
+    def plot_normalized_transfer(self, save_name=""):
+        """ Called to plot the normalized transfer curve for a data set
+
+        Parameters
+        ----------
+        axis_type : string
+            denotes whether the plot should semilogy or linear
+            options are axis_type="log" or axis_type="linear"
+        save_name : string
+            denotes the name for which the plot should be save as pdf
+            to, default to empty string and it will not save the plot
+            in this case, rather it will just call plt.show()
+        """
+        # check for correct measurement type
+        if self.test_name() == 'vgs-id':
+            # check to make sure current has values
+            if self.current() and self.gate_voltage() is not None:
+                # set plot parameters to default
+                self.__set_plot_params()
+                # x-label will always be gate voltage
+                plt.xlabel(r"$V_{gs}\,(\mathrm{V})$", fontsize=14)
+                plt.ylabel(r"$I_{ds}/W\,(\mathrm{A}/\mu\mathrm{m})$", fontsize=14)
+                plt.semilogy(self.gate_voltage(), self.normalized_current())
+                plt.tight_layout()
+                if save_name == "":
+                    plt.show()
+                else:
+                    plt.savefig(save_name+".pdf")
+            else:
+                return None   
+        # wrong measurement type
+        else:
+            return None
     
     def plot_conductivity(self, save_name=""):
         """ Called to plot the transfer curve for a data set

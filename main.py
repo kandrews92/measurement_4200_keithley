@@ -30,8 +30,8 @@ if __name__ == "__main__":
     # create a list of instances for each measurement file
     # each element is a different measurement
     measurements = [ Measurement(file) for file in files ]
-    x = Measurement(files[1])
-    x.write_analysis()
+    x = Measurement(files[1], capacitance=1.262e-8)
+    print x.reliability_factor(55.0)[0]
     #sbh = SBH(measurements)
 
     
