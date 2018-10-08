@@ -616,14 +616,29 @@ class Measurement:
         """
         current_max = abs(self.current(-1))
         current_0 = abs(self.current(self.__get_voltage_val_index(0.0)))
-        print current_0
         gate_max = abs(self.gate_voltage(-1))
         numer = (current_max - current_0)/gate_max
         denom = (self.drain_voltage()*self.width*self.capacitance*mu_linear)/self.length
         r_lin = numer/denom 
         mu_eff = r_lin * mu_linear
+        # return r_lin and mu_eff as a tuple
         return (r_lin, mu_eff)
 
+    def effective_mobility(self, threshold_voltage):
+        """ Called to calculate the effective mobility
+        where effective mobility, is defined as 
+        
+        mu_effective = sigma_2D/(Cg*(Vg-V_th)),
+        where sigma_2D is the 2D conductivity,
+        Cg is the gate capacitance, Vg is the 
+        gate voltage, and V_th is the threshold voltage
+
+        Parameters
+        ----------
+        threshold_voltage : float
+            the calculated threshold voltage
+        """
+        pass         
 
 
     def __set_plot_params(self):

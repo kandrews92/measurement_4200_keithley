@@ -24,7 +24,7 @@ def list_dir( extension=".xls", path="."):
                     files.append( file ) 
     return files
 
-if __name__ == "__main__":
+def main():
     # get the measurement files in the current path
     files = list_dir()
     # create a list of instances for each measurement file
@@ -33,5 +33,9 @@ if __name__ == "__main__":
     x = Measurement(files[1], capacitance=1.262e-8)
     print x.reliability_factor(55.0)[0]
     #sbh = SBH(measurements)
+
+if __name__ == "__main__":
+    main()
+
 
     
