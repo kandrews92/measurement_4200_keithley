@@ -70,16 +70,68 @@ class Measurement:
         self.length = length
         # capacitance in F/cm^2
         self.capacitance = capacitance 
+        # threshold voltage in Volts
+        self.threshold_voltage = None
     
-    def width(self):
+    def set_threshold_voltage(self, threshold_voltage):
+        """ Called to set the threshold voltage
+        Since self.threshold_voltage defaults to None 
+        this is needed to set the value
+
+        Parameters
+        ----------
+        threshold_voltage : float 
+            calculated threshold voltage
+        """
+        self.threshold_voltage = threshold_voltage
+    
+    def get_threshold_voltage(self):
+        """ Called to get the threshold voltage
+        """
+        return self.threshold_voltage
+
+    def set_width(self, width):
+        """ Called to set the width of the device 
+
+        Parameters
+        ----------
+        width : float 
+            width of the device in micrometers
+        """
+        self.width = width
+
+    def get_width(self):
         """ Called to get the width of the device 
         """
         return self.width
 
-    def length(self):
+    def set_length(self, length):
+        """ Called to set the width of the device 
+
+        Parameters
+        ----------
+        length : float 
+            length of the device in micrometers
+        """
+        self.length = length
+
+    def get_length(self):
         """ Called to get the length of the device
         """
         return self.length
+
+    def set_capacitance(self, capacitance):
+        """ Called to set the gate capacitance of the device 
+
+        Parameters
+        ----------
+        capacitance : float 
+            capacitance of the gate in F/cm^2
+        """        
+        self.capacitance = capacitance
+    
+    def get_capacitance(self):
+        return self.capacitance
 
     def write_analysis(self):
         """ Called to write the measurement data and some data 
@@ -614,17 +666,22 @@ class Measurement:
         mu_linear : float
             estimate linear mobility, found from linear fit
         """
-        current_max = abs(self.current(-1))
-        current_0 = abs(self.current(self.__get_voltage_val_index(0.0)))
-        gate_max = abs(self.gate_voltage(-1))
-        numer = (current_max - current_0)/gate_max
-        denom = (self.drain_voltage()*self.width*self.capacitance*mu_linear)/self.length
-        r_lin = numer/denom 
-        mu_eff = r_lin * mu_linear
-        # return r_lin and mu_eff as a tuple
-        return (r_lin, mu_eff)
+        # check for correct test type and that the data exists
+        if self.test_name() == 'vgs-id' and self.__cols() != None:
+            current_max = abs(self.current(-1))
+            current_0 = abs(self.current(self.__get_voltage_val_index(0.0)))
+            gate_max = abs(self.gate_voltage(-1))
+            numer = (current_max - current_0)/gate_max
+            denom = (self.drain_voltage()*self.width*self.capacitance*mu_linear)/self.length
+            r_lin = numer/denom 
+            mu_eff = r_lin * mu_linear
+            # return r_lin and mu_eff as a tuple
+            return (r_lin, mu_eff)
+        # either no data or wrong test name
+        else:
+            return None
 
-    def effective_mobility(self, threshold_voltage):
+    def effective_mobility(self):
         """ Called to calculate the effective mobility
         where effective mobility, is defined as 
         
@@ -632,13 +689,24 @@ class Measurement:
         where sigma_2D is the 2D conductivity,
         Cg is the gate capacitance, Vg is the 
         gate voltage, and V_th is the threshold voltage
-
-        Parameters
-        ----------
-        threshold_voltage : float
-            the calculated threshold voltage
         """
-        pass         
+        # check test name is correct and data exists
+        if self.test_name() == 'vgs-id' and self.__cols() != None:
+            # if threshold voltage is set
+            if self.threshold_voltage != None:
+                effective_mu = [] 
+                for i in range( len( self.conductivity() ) ):
+                    curr_sigma = self.conductivity(i)
+                    curr_voltage = self.gate_voltage(i) 
+                    val = curr_sigma / (self.capacitance * (curr_voltage - self.threshold_voltage ) )
+                    effective_mu.append(val)
+                return effective_mu   
+            # threshold voltage not set
+            else:
+                return None
+        # no data exists or wrong test name
+        else:
+            return None
 
 
     def __set_plot_params(self):
