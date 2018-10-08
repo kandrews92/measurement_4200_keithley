@@ -37,7 +37,7 @@ class Measurement:
     >>> x.current() # prints all the currents
     >>> x.write_analysis() # write all analysis to file
     """
-    def __init__(self, filename, width=1.0, length=1.0, capacitance=1.0):
+    def __init__(self, filename, width=1.0, length=1.0, capacitance=1.0, threshold_voltage=None):
         # string of excel file
         self.filename = filename 
         # workbook associated with filename
@@ -71,7 +71,73 @@ class Measurement:
         # capacitance in F/cm^2
         self.capacitance = capacitance 
         # threshold voltage in Volts
-        self.threshold_voltage = None
+        self.threshold_voltage = threshold_voltage
+    
+    ###########################################################
+    #
+    # Class getters and setters
+    #
+    ###########################################################
+
+    def set_filename(self, filename):
+        """ Called to set the filename
+
+        Parameters 
+        ----------
+        filename : string
+            filename (.xls) file
+        """
+        self.filename = filename 
+    
+    def get_filename(self):
+        """ Called to get the filename
+        """
+        return self.filename
+    
+    def set_data_sheet(self, data_sheet):
+        """ Called to set the data_sheet
+        
+        Parameters
+        ----------
+        data_sheet : xlrd.sheet object
+            data_sheet accessed by workbook.sheet_by_index( index )
+        """
+        self.data_sheet = data_sheet
+    
+    def get_data_sheet(self):
+        """ Called to get the data_sheet
+        """
+        return self.data_sheet
+    
+    def set_calc_sheet(self, calc_sheet):
+        """ Called to set the calc_sheet
+        
+        Parameters
+        ----------
+        calc_sheet : xlrd.sheet object
+            calc_sheet accessed by workbook.sheet_by_index( index )
+        """
+        self.calc_sheet = calc_sheet
+    
+    def get_calc_sheet(self):
+        """ Called to set the filename
+        """
+        return self.calc_sheet
+    
+    def set_settings_sheet(self, settings_sheet):
+        """ Called to set the settings_sheet
+        
+        Parameters
+        ----------
+        settings_sheet : xlrd.sheet object
+            settings_sheet accessed by workbook.sheet_by_index( index )
+        """
+        self.settings_sheet = settings_sheet 
+    
+    def get_settings_sheet(self):
+        """ Called to set the settings_sheet
+        """
+        return self.settings_sheet
     
     def set_threshold_voltage(self, threshold_voltage):
         """ Called to set the threshold voltage
@@ -131,7 +197,40 @@ class Measurement:
         self.capacitance = capacitance
     
     def get_capacitance(self):
+        """ Called to set the gate capacitance of the device 
+        """
         return self.capacitance
+
+    ###########################################################
+    #
+    # Class overloads
+    #
+    ###########################################################
+
+    def __repr__(self):
+        """ Called when user prints instance of class, mainly in 
+        interactive environment, e.g. 
+        >>> x = Measurement(file) 
+        >>> x # __repr__ would be called here
+        """
+        return "<Measurement \n\tfilename:%s\n\tworkbook:%s\n\tdata sheet:%s\
+            \n\tcalc sheet:%s\n\tsettings sheet:%s >" \
+             %(self.filename, self.workbook, self.data_sheet, \
+             self.calc_sheet, self.settings_sheet)
+
+    def __str__(self):
+        """ Called when user print instance of class
+        e.g.
+        >>> x = Measurement(file)
+        >>> print x # __str__ would be called here
+        """
+        return self.__repr__()
+
+    ###########################################################
+    #
+    # Class methods
+    #
+    ###########################################################
 
     def write_analysis(self):
         """ Called to write the measurement data and some data 
@@ -155,10 +254,20 @@ class Measurement:
                 for row in range( self.__rows() ):
                     data[col].append( sheet.cell_value( row, col ) )
             # headers of analyzed data
-            new_headers = ["S (uS) "+str(self.drain_voltage())
-                +"V "+str(self.temperature())+"K", "Norm Ids (A/um) "+
-                str(self.drain_voltage())+"V "+str(self.temperature() )+
-                "K"]
+            # if the threshold voltage is set then the effective mobility
+            # will also be added to the new file
+            if self.threshold_voltage == None: 
+                new_headers = ["S (uS) "+str(self.drain_voltage())
+                    +"V "+str(self.temperature())+"K", "Norm Ids (A/um) "+
+                    str(self.drain_voltage())+"V "+str(self.temperature() )+
+                    "K"]
+            else:
+                new_headers = ["S (uS) "+str(self.drain_voltage())
+                    +"V "+str(self.temperature())+"K", "Norm Ids (A/um) "+
+                    str(self.drain_voltage())+"V "+str(self.temperature() )+
+                    "K", "mu_effective (cm^2 V^-1 s^-1) "+str(self.drain_voltage())
+                    +"V; V_th "+str(self.threshold_voltage)+" V; "
+                    +str(self.capacitance)+" F/cm^2; "+str(self.temperature())+"K"]
             # analyzed data to be added to the sheet
             new_data = [ [] for col in range( len( new_headers ) ) ]
             # populate new_data with conductivity and the norm current
@@ -178,6 +287,16 @@ class Measurement:
                     # included, so self.__rows() would throw an index error
                     for row in range( len(self.normalized_current() ) ):
                         new_data[col].append( self.normalized_current( row ) )
+                # add the effective mobility, if it does not exist, e.g. the
+                # threshold_voltage is not set, then this statement will 
+                # be skipped
+                elif col == 2:
+                    # use len( self.normalized_current() ) because 
+                    # self.__rows() = self.normalized_current() + 1
+                    # self.__rows() includes the length with the original header
+                    # included, so self.__rows() would throw an index error
+                    for row in range( len(self.effective_mobility() ) ):
+                        new_data[col].append( self.effective_mobility( row ) )
             # clean up the microamps drain current header to include
             # drain voltage and temperature
             self.__replace_header(data, "IDS_UA", "Ids (uA) "+str(self.drain_voltage())
@@ -212,26 +331,6 @@ class Measurement:
         for col in range( len(array) ):
             if array[col][0] == old_str:
                 array[col][0] = replace_str
-        
-                
-    def __repr__(self):
-        """ Called when user prints instance of class, mainly in 
-        interactive environment, e.g. 
-        >>> x = Measurement(file) 
-        >>> x # __repr__ would be called here
-        """
-        return "<Measurement \n\tfilename:%s\n\tworkbook:%s\n\tdata sheet:%s\
-            \n\tcalc sheet:%s\n\tsettings sheet:%s >" \
-             %(self.filename, self.workbook, self.data_sheet, \
-             self.calc_sheet, self.settings_sheet)
-
-    def __str__(self):
-        """ Called when user print instance of class
-        e.g.
-        >>> x = Measurement(file)
-        >>> print x # __str__ would be called here
-        """
-        return self.__repr__()
 
     def temperature(self, delim1="_", delim2="."):
         """ Called to get the temperature from a file name
@@ -681,7 +780,7 @@ class Measurement:
         else:
             return None
 
-    def effective_mobility(self):
+    def effective_mobility(self, index=None):
         """ Called to calculate the effective mobility
         where effective mobility, is defined as 
         
@@ -689,25 +788,50 @@ class Measurement:
         where sigma_2D is the 2D conductivity,
         Cg is the gate capacitance, Vg is the 
         gate voltage, and V_th is the threshold voltage
+
+        Parameters
+        ----------
+        index : int or None
         """
         # check test name is correct and data exists
         if self.test_name() == 'vgs-id' and self.__cols() != None:
             # if threshold voltage is set
             if self.threshold_voltage != None:
-                effective_mu = [] 
-                for i in range( len( self.conductivity() ) ):
-                    curr_sigma = self.conductivity(i)
-                    curr_voltage = self.gate_voltage(i) 
+                # no index, given. Return entire array
+                if index == None:
+                    effective_mu = [] 
+                    for i in range( len( self.conductivity() ) ):
+                        # conductivity is store in microSiemens 
+                        # so must be converted back to Siemens, by a 
+                        # factor of 1e-6
+                        curr_sigma = self.conductivity(i) * 1.e-6
+                        curr_voltage = self.gate_voltage(i) 
+                        val = curr_sigma / (self.capacitance * (curr_voltage - self.threshold_voltage ) )
+                        effective_mu.append(val)
+                    return effective_mu  
+                # index given, return single value
+                elif type(index) == int:
+                    # conductivity is store in microSiemens 
+                    # so must be converted back to Siemens, by a 
+                    # factor of 1e-6
+                    curr_sigma = self.conductivity(index) * 1.e-6
+                    curr_voltage = self.gate_voltage(index)
                     val = curr_sigma / (self.capacitance * (curr_voltage - self.threshold_voltage ) )
-                    effective_mu.append(val)
-                return effective_mu   
+                    return val
+                # wrong index type
+                else:
+                    return None
             # threshold voltage not set
             else:
                 return None
         # no data exists or wrong test name
         else:
             return None
-
+    ###########################################################
+    #
+    # Class plotting methods
+    #
+    ###########################################################
 
     def __set_plot_params(self):
         """ Called from plotting functions to reset the parameters
@@ -796,9 +920,6 @@ class Measurement:
 
         Parameters
         ----------
-        axis_type : string
-            denotes whether the plot should semilogy or linear
-            options are axis_type="log" or axis_type="linear"
         save_name : string
             denotes the name for which the plot should be save as pdf
             to, default to empty string and it will not save the plot
@@ -825,93 +946,30 @@ class Measurement:
         else:
             return None
     
-class SBH(Measurement):
-    def __init__(self, *files):
-        self.filenames = files
-        #print files[0][0].gate_voltage()
-    
-    def __voltage_headers(self, order="3/2"):
-        """ Called to make the voltage headers for the SBH data 
-
-        Parameters
-        ----------
-        order : string
-            order of ln( I / (kb * T^(order) ) ) 
-            defaults to 3/2, other value could be 2
-        """
-        header = []
-        base_str = "I @ Vgs = "
-        lnT_base_str = "ln(I/(kb*T^("+str(order)+"))) @ Vgs = "
-        # loop only over a single measurement here because it is assumed 
-        # that the step size is consistent throughout all the measurements
-        # if it is not the case, then it will not work
-        for i in range( 0, len( self.filenames[0][0].gate_voltage() ) ):
-            voltage = self.filenames[0][0].gate_voltage()[i]
-            voltage = str( round(voltage, 2) ) + " V"
-            header.append(base_str + voltage)
-            header.append(lnT_base_str + voltage)
-        return header
-
-    def __current_voltage_dict(self, order=1.5):
-        """Called to make the current and voltage dictionary, calls upon the
-        __voltage_headers function to combine
-
-        Parameters
-        ----------
-        order : float
-            order of T^(order), defaults to 3/2, also could be 2
-        """
-        currents = [ [] for i in range( len(self.filenames[0][0].current()) * 2 ) ]
-        # loop over class args passed
-        for i in range( 0, len( self.filenames[0] ) ):
-            # current files measurement temperature
-            curr_temp = self.filenames[0][i].temperature()
-            print curr_temp
-            # loop over each current value in each file
-            for j in range( 0, len( self.filenames[0][i].current() ) ):
-                # current values at each gate voltage
-                curr_val = self.filenames[0][i].current()[j] 
-                # ln( I/ (kb * T^(3/2) ) ) values at each gate voltage
-                try:
-                    lnT_curr_val = np.log( curr_val / (scc.k * curr_temp**(order)))
-                except RuntimeWarning:
-                    lnT_curr_val = 0.0
-                #
-                currents[j*2-2].append( curr_val )
-                currents[j*2-1].append( lnT_curr_val )
-        return OrderedDict( zip( self.__voltage_headers(), currents ) )
-    
-        
-    def __temperature_dict(self)  :
-        """ Called to make the temperature dictionary for SBH analysis
-        """
-        # each column header
-        headers = ['T (K)', '1/kT', '1000/T (1/K)']
-        # each column has its own list of values
-        temps = [ [] for head in range( len( headers) ) ]
-        # loop over each class argument
-        for t in range ( len( self.filenames[0] ) ):
-            # get the temperature of current argument 
-            curr_t = self.filenames[0][t].temperature()
-            temps[0].append( curr_t )
-            temps[1].append( scc.e / (scc.k * curr_t) )
-            temps[2].append( 1000.0 / curr_t)
-        # combine headers and temps into a list and make ordered dict
-        return OrderedDict( zip( headers, temps ) )
-            
-    def __merge_dicts(*dict_args):
-        """ Given any number of dicts, shallow copy and merge into a new
-        dicts, precedence goes to key value pairs in latter dicts
-
-        Parameters
-        ----------
-        *dict_args : dictionary or dictionaries 
-            pass any number of dictionaries to be merged
-            e.x. merge_dicts( a, b, c, d, ..., z )
-        """
-        # use ordered dictionaries to preserve key, value order
-        result = OrderedDict()
-        for dictionary in dict_args:
-            result.update( dictionary )
-        return result
-    
+    def plot_effective_mobility(self, save_name=""):
+        # check for correct measurement type
+        if self.test_name() == 'vgs-id':
+            # check to make sure effective mobility and gate 
+            # voltage have values
+            if self.effective_mobility() and self.gate_voltage() is not None:
+                # set plot parameters to default
+                self.__set_plot_params()
+                # x-label will always be gate voltage
+                plt.xlabel(r"$V_{gs}\,(\mathrm{V})$", fontsize=14)
+                plt.ylabel(r"$\mu_\mathrm{eff}\,(\mathrm{cm}^{2}\,\mathrm{V}^{-1}\,\mathrm{s}^{-1})$", fontsize=14)
+                plt.plot(self.gate_voltage(), self.effective_mobility())
+                # since a spike in mu_eff occurs near Vg = V_th, change 
+                # the x_limits to be V_th as the minimum and the 
+                # y_limits to be zero
+                plt.gca().set_xlim( xmin=self.threshold_voltage )
+                plt.gca().set_ylim( ymin = 0.0 ) 
+                plt.tight_layout()
+                if save_name == "":
+                    plt.show()
+                else:
+                    plt.savefig(save_name+".pdf")
+            # effective mobility or gate voltage is not populated
+            else:
+                return None
+        # wrong measurement type
+        return None

@@ -1,5 +1,4 @@
 from measurement import Measurement
-from measurement import SBH
 import os
 
 def list_dir( extension=".xls", path="."):
@@ -30,8 +29,8 @@ def main():
     # create a list of instances for each measurement file
     # each element is a different measurement
     measurements = [ Measurement(file) for file in files ]
-    x = Measurement(files[1], capacitance=1.262e-8)
-    print x.reliability_factor(55.0)[0]
+    x = Measurement(files[1], capacitance=1.262e-8, threshold_voltage=-1.0)
+    x.plot_effective_mobility()
     #sbh = SBH(measurements)
 
 if __name__ == "__main__":
