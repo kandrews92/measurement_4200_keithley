@@ -1,4 +1,5 @@
 from measurement import Measurement
+import matplotlib.pyplot as plt
 import os
 
 def list_dir( extension=".xls", path="."):
@@ -30,8 +31,7 @@ def main():
     # each element is a different measurement
     measurements = [ Measurement(file) for file in files ]
     x = Measurement(files[1], capacitance=1.262e-8, threshold_voltage=-1.0)
-    x.plot_effective_mobility()
-    #sbh = SBH(measurements)
+    x.plot_transconductance()
 
 if __name__ == "__main__":
     main()

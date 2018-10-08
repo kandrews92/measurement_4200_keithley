@@ -687,7 +687,7 @@ class Measurement:
         else:
             return None 
 
-    def conductivity(self, index=None):
+    def conductivity(self, index=None, units='uS'):
         """ Called to get the conductivity in uS, where
         S = I/Vds * L/W
 
@@ -698,21 +698,131 @@ class Measurement:
         # check for correct measurement type
         if self.test_name() == "vgs-id":
             conduct = []
+            # tuple of units and corresponding multiplication factor
+            suffix = ( ("S", 1.0 ), ("uS", 1.0e6) )
+            # compare the units argument to the tuple pairs' first argument
+            for pair in range( len(suffix) ):
+                if units == suffix[pair][0]:
+                    # set the multiplication factor to the tuple pairs'
+                    # second argument
+                    factor = suffix[pair][1]
             # no index given, return entire array
             if index == None:
                 for i in range( len( self.current() ) ):
                     # current in microAmps, use units arg
-                    val = self.current(index=i, units='uA')
+                    val = self.current(index=i, units='A') * factor
                     val = ( val / self.drain_voltage() ) * ( self.length / self.width )
                     conduct.append( val )
                 return conduct
             # index given, return single value
             elif type(index) == int:
-                val = self.current(index=index, units='uA')
+                val = self.current(index=index, units='A') * factor
                 val = ( val/self.drain_voltage() ) * ( self.length / self.width )
                 return val
         # wrong measurement type
         else:
+            return None
+
+    def __smooth_data(self, data, window_len, window='hanning'):
+        """smooth the data using a window with requested size.
+    
+        This method is based on the convolution of a scaled window with the signal.
+        The signal is prepared by introducing reflected copies of the signal 
+        (with the window size) in both ends so that transient parts are minimized
+        in the begining and end part of the output signal.
+        
+        Parameters
+        ----------
+        data: array or list
+            the input signal 
+        window_len: index (ood)
+            the dimension of the smoothing window; 
+            should be an odd integer
+        window: string
+            the type of window from 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'
+            flat window will produce a moving average smoothing.
+
+        output:
+            the smoothed signal
+            
+        example:
+
+        t=linspace(-2,2,0.1)
+        x=sin(t)+randn(len(t))*0.1
+        y=smooth(x)
+        
+        see also: 
+        
+        numpy.hanning, numpy.hamming, numpy.bartlett, numpy.blackman, numpy.convolve
+        scipy.signal.lfilter
+    
+        TODO: the window parameter could be the window itself if an array instead of a string
+        NOTE: length(output) != length(input), to correct this: return y[(window_len/2-1):-(window_len/2)] instead of just y.
+
+        Credit to: https://scipy-cookbook.readthedocs.io/items/SignalSmooth.html
+        """
+        # convert data to numpy array to make the smoothing easier
+        data = np.asarray( data )
+        if data.ndim != 1:
+            raise ValueError, "smooth only accepts 1D arrays"
+        if window_len % 2 != 1: 
+            raise ValueError, "Window length must be odd"
+        if  data.size < window_len:
+            raise ValueError, "Input array needs to be larger than the window size"
+        if window_len < 3: 
+            return data.tolist()
+        if not window in ['flat', 'hanning', 'hamming', 'bartlett','blackman']:
+            raise ValueError, "Window is one of 'flat', 'hanning', 'hamming', 'bartlett', 'blackman' "
+        s = np.r_[data[window_len-1:0:-1], data, data[-2:-window_len-1:-1]]
+        if window == 'flat': # moving average
+            w = np.ones(window_len, 'd')
+        else:
+            w = eval('np.'+window+'(window_len)')
+        smoothed = np.convolve( w/w.sum(), s, mode='valid')
+        #return smoothed 
+        return smoothed[(window_len/2-1):-(window_len/2+1)]
+
+    def transconductance(self, window_len=9):
+        """ Called to get the transconductance of the 
+        measurement. 
+
+        Transconductance is defined as 
+        G = dS/dVg, where S is the conductivity in siemens 
+        and Vg is the gate-voltage in volts
+
+        The steps to calculate are:
+        1) Smooth S (in siemens)
+        2) Calculate derivative
+
+        Parameters 
+        ----------
+        window_len : int (must be odd)
+        """
+        if self.test_name() == 'vgs-id':
+            if self.conductivity() and self.gate_voltage() != None:
+                # convert the conductivity from siemens to microsiemens
+                sigma = self.conductivity(units='S')
+                # smooth the data
+                sigma = self.__smooth_data( sigma, window_len )
+                # calculate G 
+                # note: len(G) = len(self.gate_voltage())-1
+                G = np.diff(sigma)/np.diff(self.gate_voltage())
+                return G
+            else:
+                return None
+        else:
+            return None
+
+    def field_effect_mobility(self):
+        """ Called to get an array of the field effect mobilities 
+        calculated from the transconductance divided by Capacitance
+        """
+        if self.test_name() == "vgs-id":
+            if self.conductivity() and self.gate_voltage() != None:
+                return [ x / self.capacitance for x in self.transconductance() ]
+            else:
+                return None
+        else: 
             return None
     
     def __get_voltage_val_index(self, val, epsilon=1e-1):
@@ -827,6 +937,7 @@ class Measurement:
         # no data exists or wrong test name
         else:
             return None
+    
     ###########################################################
     #
     # Class plotting methods
@@ -973,3 +1084,62 @@ class Measurement:
                 return None
         # wrong measurement type
         return None
+
+    def plot_transconductance(self, save_name=""):
+        # check for correct measurement type
+        if self.test_name() == 'vgs-id':
+            # check to make sure transconductance and gate 
+            # voltage have values
+            if self.conductivity() and self.gate_voltage() is not None:
+                # set plot parameters to default
+                self.__set_plot_params()
+                # x-label will always be gate voltage
+                plt.xlabel(r"$V_{gs}\,(\mathrm{V})$", fontsize=14)
+                plt.ylabel(r"$d\mathrm{S}/d\mathrm{V}_g\,(\mathrm{S})$", fontsize=14)
+                # delete the first element in gate voltage
+                # so that transconductance and gate_voltage have the same dimensions
+                # there's probably a better way to do this
+                gate_voltage = self.gate_voltage()
+                del gate_voltage[0]
+                plt.plot(gate_voltage, self.transconductance())
+                plt.tight_layout()
+                if save_name == "":
+                    plt.show()
+                else:
+                    plt.savefig(save_name+".pdf")
+            # transconductance or gate voltage is not populated
+            else:
+                return None
+        # wrong measurement type
+        return None
+
+    def plot_field_effect_moblity(self, save_name=""):
+        # check for correct measurement type
+        if self.test_name() == 'vgs-id':
+            # check to make sure FE mobility and gate 
+            # voltage have values
+            if self.field_effect_mobility() and self.gate_voltage() is not None:
+                # set plot parameters to default
+                self.__set_plot_params()
+                # x-label will always be gate voltage
+                plt.xlabel(r"$V_{gs}\,(\mathrm{V})$", fontsize=14)
+                plt.ylabel(r"$\mu_\mathrm{FE}\,(\mathrm{cm}^{2}\,\mathrm{V}^{-1}\,\mathrm{s}^{-1})$", fontsize=14)
+                # delete the first element in gate voltage
+                # so that mu_field_effect and gate_voltage have the same dimensions
+                # there's probably a better way to do this
+                gate_voltage = self.gate_voltage()
+                del gate_voltage[0]
+                plt.plot(gate_voltage, self.field_effect_mobility())
+                plt.tight_layout()
+                if save_name == "":
+                    plt.show()
+                else:
+                    plt.savefig(save_name+".pdf")
+            # mobility or gate voltage is not populated
+            else:
+                return None
+        # wrong measurement type
+        return None
+    
+    def plot_output(self, save_name=""):
+        pass
