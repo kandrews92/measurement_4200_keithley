@@ -34,7 +34,7 @@ def main():
     x = Measurement(files[1], capacitance=1.262e-8, threshold_voltage=-1.0)
     #y = SBH(measurements)
     y = SBH(measures)
-    print y.generate_output_headers()
+    y.write_analysis()
     
 
 if __name__ == "__main__":

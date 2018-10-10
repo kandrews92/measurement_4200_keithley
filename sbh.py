@@ -1,7 +1,7 @@
 from measurement import Measurement
 from collections import OrderedDict
 import xlrd
-import xlwt
+import openpyxl as xl
 import scipy.constants as scc
 import numpy as np 
 
@@ -74,22 +74,45 @@ class SBH:
             temps.append( self.measurements[i].temperature() )
         return temps
     
-    def lnT_current(self, index):
+    def lnT_current(self, item, index=None):
         """ Called to return the whole lnT array for a given
         measurement
 
         Parameters
         ----------
-        index : int 
-
-        order : float
-            order of the exponent in Ln(I/T^(order)), usually either 1.5 or 2.0
+        item : int 
+            refers to specific measurement 
+        index : int or None 
+            refers to a specific value within the aforementioned item (measurement)
         """
         try:
-            return self.measurements[index].lnT_current(order=self.order)
+            if type(index) == int:
+                return self.measurements[item].lnT_current(order=self.order)[index]
+            else:
+                return self.measurements[item].lnT_current(order=self.order)
         except IndexError:
             print "Index out of Bounds, Measurement index does not exist"
             return None
+    
+    def current(self, item, index=None):
+        """ Called to return whole current array for a given 
+        measurement
+
+        Parameters
+        ----------
+        item : int 
+            refers to specific measurement 
+        index : int or None 
+            refers to a specific value within the aforementioned item (measurement)
+        """
+        try:
+            if type(index) == int:
+                return self.measurements[item].current()[index]
+            else:
+                return self.measurements[item].current()
+        except IndexError:
+            print "Index out of Bounds, Measurement index does not exist"
+            return None 
     
     def __check_gate_step_consistency(self):
         """ Called to check that the gate step size is the same throughout all the 
@@ -106,7 +129,7 @@ class SBH:
         else:
             return False
     
-    def generate_output_headers(self):
+    def __generate_output_headers(self):
         """ Called to generate an array of headers for each voltage column
         """
         # check that step sizes are equal
@@ -125,14 +148,43 @@ class SBH:
             print "Gate step size is not equal"
             return None
 
-    def lnT_current_dict(self):
-        pass 
+    def __lnT_current_dict(self):
+        """ Called to make the current dictionary with the correct headers
+        """
+        current = [ [] for i in range( len(self.measurements[0].gate_voltage() ) * 2) ]
+        # loop over all the measurements
+        for i in range( len( self.measurements ) ):
+            # loop over each row in the measurement 
+            for j in range( len(self.measurements[i].gate_voltage() ) ):
+                # fill alternate lists with either current or lnT current
+                # j * 2 = 0, 2, 4, 6, ... 
+                # j * 2 + 1 = 1, 3, 5, 7, ...
+                current[j*2].append( self.current(i, j) ) # i-th measurement, j-th column of that measurement
+                current[j*2+1].append( self.lnT_current(i, j) ) 
+        return OrderedDict( zip(self.__generate_output_headers(), current) )
     
-    def temperature_dict(self):
+    def __temperature_dict(self):
+        """ Called to create a temperature dict
+        with three headers and the corresponding values for each header taken
+        from the file
+        """
         headers = ["T (K)", "1/kbT (1/eV)", "1000/T (1/K)"]
-        
+        # create a list for each header
+        t_vals = [ [] for s in range( len( headers ) ) ]
+        # loop over all temperatures
+        for t in range( len( self.get_temperatures() ) ):
+            t_vals[0].append( self.get_temperatures()[t] )
+            t_vals[1].append( scc.e / ( scc.k * self.get_temperatures()[t] ) )
+            t_vals[2].append( 1000./self.get_temperatures()[t] )
+        return OrderedDict( zip( headers, t_vals ) )
+
+    def __voltage_phiB_dict(self):
+        """ Called to create a voltage and phib dict
+        with the corresponding headers and values
+        """
+        return ["Vgs (V)", "PhiB (eV)", "PhiB (meV)", "R"]
     
-    def merge_dicts(self, *dict_args):
+    def __merge_dicts(self, *dict_args):
         """ Given any number of dicts, shallow copy and merge into a new
         dicts, precedence goes to key value pairs in latter dicts
 
@@ -147,3 +199,30 @@ class SBH:
         for dictionary in dict_args:
             result.update( dictionary )
         return result
+
+    def write_analysis(self, save_name="SBH_analysis.xls"):
+        # create new workbook
+        wb = xl.Workbook()
+        # create new worksheet
+        data_sheet = wb.create_sheet('Current vs. Temperature')
+        voltage_sheet= wb.create_sheet("Voltage vs. PhiB")
+        # merge and generate data for the sheet
+        data_dict = self.__merge_dicts( self.__temperature_dict(), self.__lnT_current_dict() )
+        headers = list( data_dict.keys() )
+        dims = {}
+        for i in range( 1, len( headers ) + 1):
+            data_sheet.cell(column=i, row=1, value=headers[i-1])
+        count = 1
+        for val in data_dict.itervalues():
+            for i in range(2):
+                data_sheet.cell(column=count, row=i+2, value=val[i])
+            count += 1
+        # set the default column width to be the size of the string in the first row
+        for row in data_sheet.rows:
+            for cell in row:
+                if cell.value:
+                    dims[cell.column] = max((dims.get(cell.column, 0), len(str(cell.value))))
+        for col, value in dims.items():
+            data_sheet.column_dimensions[col].width = value
+        wb.save(save_name)
+        wb.close()
