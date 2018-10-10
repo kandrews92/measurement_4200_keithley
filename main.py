@@ -1,4 +1,5 @@
 from measurement import Measurement
+from sbh import SBH
 import matplotlib.pyplot as plt
 import os
 
@@ -29,9 +30,14 @@ def main():
     files = list_dir()
     # create a list of instances for each measurement file
     # each element is a different measurement
-    measurements = [ Measurement(file) for file in files ]
+    print files
+    measures = [ Measurement(file) for file in files ]
     x = Measurement(files[1], capacitance=1.262e-8, threshold_voltage=-1.0)
-    x.plot_transconductance()
+    #y = SBH(measurements)
+    y = SBH(measures)
+    print y.lnT_current(1)
+    
+    
 
 if __name__ == "__main__":
     main()

@@ -1,6 +1,6 @@
 import xlrd
 import xlwt
-import scipy.constants as sc
+import scipy.constants as scc
 import numpy as np 
 import matplotlib.pyplot as plt
 import math
@@ -103,12 +103,12 @@ class Measurement:
             data_sheet accessed by workbook.sheet_by_index( index )
         """
         self.data_sheet = data_sheet
-    
+
     def get_data_sheet(self):
         """ Called to get the data_sheet
         """
         return self.data_sheet
-    
+
     def set_calc_sheet(self, calc_sheet):
         """ Called to set the calc_sheet
         
@@ -761,26 +761,29 @@ class Measurement:
 
         Credit to: https://scipy-cookbook.readthedocs.io/items/SignalSmooth.html
         """
-        # convert data to numpy array to make the smoothing easier
-        data = np.asarray( data )
-        if data.ndim != 1:
-            raise ValueError, "smooth only accepts 1D arrays"
-        if window_len % 2 != 1: 
-            raise ValueError, "Window length must be odd"
-        if  data.size < window_len:
-            raise ValueError, "Input array needs to be larger than the window size"
-        if window_len < 3: 
-            return data.tolist()
-        if not window in ['flat', 'hanning', 'hamming', 'bartlett','blackman']:
-            raise ValueError, "Window is one of 'flat', 'hanning', 'hamming', 'bartlett', 'blackman' "
-        s = np.r_[data[window_len-1:0:-1], data, data[-2:-window_len-1:-1]]
-        if window == 'flat': # moving average
-            w = np.ones(window_len, 'd')
+        if self.test_name() == 'vgs-id':
+            # convert data to numpy array to make the smoothing easier
+            data = np.asarray( data )
+            if data.ndim != 1:
+                raise ValueError, "smooth only accepts 1D arrays"
+            if window_len % 2 != 1: 
+                raise ValueError, "Window length must be odd"
+            if  data.size < window_len:
+                raise ValueError, "Input array needs to be larger than the window size"
+            if window_len < 3: 
+                return data.tolist()
+            if not window in ['flat', 'hanning', 'hamming', 'bartlett','blackman']:
+                raise ValueError, "Window is one of 'flat', 'hanning', 'hamming', 'bartlett', 'blackman' "
+            s = np.r_[data[window_len-1:0:-1], data, data[-2:-window_len-1:-1]]
+            if window == 'flat': # moving average
+                w = np.ones(window_len, 'd')
+            else:
+                w = eval('np.'+window+'(window_len)')
+            smoothed = np.convolve( w/w.sum(), s, mode='valid')
+            #return smoothed 
+            return smoothed[(window_len/2-1):-(window_len/2+1)]
         else:
-            w = eval('np.'+window+'(window_len)')
-        smoothed = np.convolve( w/w.sum(), s, mode='valid')
-        #return smoothed 
-        return smoothed[(window_len/2-1):-(window_len/2+1)]
+            return None 
 
     def transconductance(self, window_len=9):
         """ Called to get the transconductance of the 
@@ -950,7 +953,7 @@ class Measurement:
         """
         mpl.rcParams.update(mpl.rcParamsDefault)
 
-    def plot_transfer(self, axis, save_name=""):
+    def plot_transfer(self, axis, show=True, save_name=""):
         """ Called to plot the transfer curve for a data set
 
         Parameters
@@ -992,7 +995,7 @@ class Measurement:
         else:
             return None
 
-    def plot_normalized_transfer(self, save_name=""):
+    def plot_normalized_transfer(self, show=True, save_name=""):
         """ Called to plot the normalized transfer curve for a data set
 
         Parameters
@@ -1026,7 +1029,7 @@ class Measurement:
         else:
             return None
     
-    def plot_conductivity(self, save_name=""):
+    def plot_conductivity(self, show=True, save_name=""):
         """ Called to plot the transfer curve for a data set
 
         Parameters
@@ -1057,7 +1060,7 @@ class Measurement:
         else:
             return None
     
-    def plot_effective_mobility(self, save_name=""):
+    def plot_effective_mobility(self, show=True, save_name=""):
         # check for correct measurement type
         if self.test_name() == 'vgs-id':
             # check to make sure effective mobility and gate 
@@ -1085,7 +1088,7 @@ class Measurement:
         # wrong measurement type
         return None
 
-    def plot_transconductance(self, save_name=""):
+    def plot_transconductance(self, show=True, save_name=""):
         # check for correct measurement type
         if self.test_name() == 'vgs-id':
             # check to make sure transconductance and gate 
@@ -1113,7 +1116,7 @@ class Measurement:
         # wrong measurement type
         return None
 
-    def plot_field_effect_moblity(self, save_name=""):
+    def plot_field_effect_moblity(self, show=True, save_name=""):
         # check for correct measurement type
         if self.test_name() == 'vgs-id':
             # check to make sure FE mobility and gate 
@@ -1141,5 +1144,5 @@ class Measurement:
         # wrong measurement type
         return None
     
-    def plot_output(self, save_name=""):
+    def plot_output(self, show=True, save_name=""):
         pass
