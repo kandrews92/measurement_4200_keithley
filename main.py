@@ -30,13 +30,11 @@ def main():
     files = list_dir()
     # create a list of instances for each measurement file
     # each element is a different measurement
-    print files
     measures = [ Measurement(file) for file in files ]
     x = Measurement(files[1], capacitance=1.262e-8, threshold_voltage=-1.0)
     #y = SBH(measurements)
     y = SBH(measures)
-    print y.lnT_current(1)
-    
+    print y.generate_output_headers()
     
 
 if __name__ == "__main__":
