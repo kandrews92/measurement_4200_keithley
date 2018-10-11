@@ -1,6 +1,5 @@
 from measurement import Measurement
 from sbh import SBH
-from qdafile import QDAfile
 import matplotlib.pyplot as plt
 import numpy as np
 import os

@@ -1,5 +1,3 @@
-# measurement_4200_keithley
-
 # Analysis of Measurements with 4200 Keithley Semiconductor Analyzer
 
 One Paragraph of project description goes here
