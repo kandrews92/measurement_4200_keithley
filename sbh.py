@@ -183,6 +183,7 @@ class SBH:
         with the corresponding headers and values
         """
         return ["Vgs (V)", "PhiB (eV)", "PhiB (meV)", "R"]
+        
     
     def __merge_dicts(self, *dict_args):
         """ Given any number of dicts, shallow copy and merge into a new
@@ -201,6 +202,20 @@ class SBH:
         return result
 
     def write_analysis(self, save_name="SBH_analysis.xls"):
+        """ Called to write the analysis 
+        to two excel sheets
+        1. Current vs. Temperature
+            contains:
+            T, 1/kT, 1000/T, I @ Vgs= xxV, ln(I/T^(3/2)) @ Vgs= xxV,... 
+        2. Voltage vs. PhiB
+            contains:
+            Vgs, PhiB(eV), PhiB(meV), R
+        
+        Parameters
+        ----------
+        save_name : string
+            name to save excel sheet to
+        """
         # create new workbook
         wb = xl.Workbook()
         # create new worksheet
@@ -209,7 +224,9 @@ class SBH:
         # merge and generate data for the sheet
         data_dict = self.__merge_dicts( self.__temperature_dict(), self.__lnT_current_dict() )
         headers = list( data_dict.keys() )
+        voltage_headers = self.__voltage_phiB_dict()
         dims = {}
+        # fill the data sheet
         for i in range( 1, len( headers ) + 1):
             data_sheet.cell(column=i, row=1, value=headers[i-1])
         count = 1
@@ -217,12 +234,26 @@ class SBH:
             for i in range(2):
                 data_sheet.cell(column=count, row=i+2, value=val[i])
             count += 1
+        # fill the voltage sheet
+        for i in range( 1, len( voltage_headers ) + 1 ):
+            voltage_sheet.cell(column=i, row=1, value=voltage_headers[i-1])
+        for i in range( 2, len( self.measurements[0].gate_voltage() ) ):
+            voltage_sheet.cell(column=1, row=i, value=self.measurements[0].gate_voltage()[i-2])
         # set the default column width to be the size of the string in the first row
+        # for the data sheet
         for row in data_sheet.rows:
             for cell in row:
                 if cell.value:
                     dims[cell.column] = max((dims.get(cell.column, 0), len(str(cell.value))))
         for col, value in dims.items():
             data_sheet.column_dimensions[col].width = value
+        # set the default column width to be the size of the string in the first row
+        # for the voltage sheet
+        for row in voltage_sheet.rows:
+            for cell in row:
+                if cell.value:
+                    dims[cell.column] = max((dims.get(cell.column, 0), len(str(cell.value))))
+        for col, value in dims.items():
+            voltage_sheet.column_dimensions[col].width = value
         wb.save(save_name)
         wb.close()
