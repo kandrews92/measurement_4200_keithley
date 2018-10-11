@@ -1,6 +1,8 @@
 from measurement import Measurement
 from sbh import SBH
+from qdafile import QDAfile
 import matplotlib.pyplot as plt
+import numpy as np
 import os
 
 def list_dir( extension=".xls", path="."):
@@ -33,8 +35,12 @@ def main():
     measures = [ Measurement(file) for file in files ]
     x = Measurement(files[1], capacitance=1.262e-8, threshold_voltage=-1.0)
     #y = SBH(measurements)
-    y = SBH(measures)
-    y.write_analysis()
+    #y = SBH(measures)
+    #y.write_analysis()
+    print x.get_filename()
+    qda = QDAfile()
+    qda.data = np.asarray(x.current(0))
+    qda.write(x.get_filename()+'.qda')
     
 
 if __name__ == "__main__":
