@@ -61,6 +61,7 @@ def plot_conductivity_transfer(measurements):
     """ Plot several temperatures at once """
     import matplotlib.pyplot as plt 
     import matplotlib as mpl 
+    from matplotlib.offsetbox import AnchoredText
     for i in range( len(measurements) ):
         if measurements[i].temperature > 280.0:
             idx = i
@@ -73,6 +74,8 @@ def plot_conductivity_transfer(measurements):
     ax2.plot(measurements[idx].gate_voltage(), measurements[idx].conductivity(), 'b')
     ax2.set_ylabel(r'$\sigma_{2\mathrm{D}}\,(\mu\mathrm{S})$', color='b', fontsize=16)
     ax2.tick_params('y', colors='b')
+    anchored_text = AnchoredText(r"$T = $"+str(measurements[idx].temperature())+r"$\,\mathrm{K}$"+"\n"+r"$V_\mathrm{ds} = $"+str(measurements[idx].drain_voltage())+r"$\,\mathrm{V}$", loc=4)
+    ax1.add_artist(anchored_text)
     fig.tight_layout()
     plt.show()
 
@@ -118,6 +121,10 @@ def main():
     plot_conductivity_temperature(n)
     plot_transfer_temperature(n)
     plot_conductivity_transfer(n)
+
+    # write the analysis of each of the files 
+    for item in n:
+        item.write_analysis() # output is in data/
 
 
 

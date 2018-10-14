@@ -232,7 +232,7 @@ class Measurement:
     #
     ###########################################################
 
-    def write_analysis(self, output_dir=None):
+    def write_analysis(self):
         """ Called to write the measurement data and some data 
         analysis to an excel file
         """
@@ -317,13 +317,6 @@ class Measurement:
                 # is not jagged
                 for row in range( len( data[0] ) ):
                     new_sheet.write( row, col, data[col][row] )
-            # save the book with a file name that is the same as 
-            # self.file name with an 'analyzed' added
-            #if output_dir == None:
-            #    new_book.save(self.__strip_excel()+"_analyzed.xls")
-            #elif output_dir == str:
-            #    new_book.save(output_dir+"/"+self.__strip_excel()+"_analyzed.xls")
-            #else:
             new_book.save(self.__strip_excel()+"_analyzed.xls")
 
     
