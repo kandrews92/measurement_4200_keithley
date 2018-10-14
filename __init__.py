@@ -1,2 +1,3 @@
 from measurement_4200_keithley.measurement import Measurement 
 from measurement_4200_keithley.sbh import SBH 
+from measurement_4200_keithley.plotmeasurement import PlotMeasurements

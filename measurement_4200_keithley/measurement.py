@@ -232,7 +232,7 @@ class Measurement:
     #
     ###########################################################
 
-    def write_analysis(self):
+    def write_analysis(self, output_dir=None):
         """ Called to write the measurement data and some data 
         analysis to an excel file
         """
@@ -311,7 +311,6 @@ class Measurement:
             new_book = xlwt.Workbook()
             # add sheet
             new_sheet = new_book.add_sheet("Analyzed Data")
-            print len(data), len(data[0])
             # number of columns is len(data)
             for col in range( len( data ) ):
                 # number of rows is len(data[0]) because the array
@@ -320,7 +319,13 @@ class Measurement:
                     new_sheet.write( row, col, data[col][row] )
             # save the book with a file name that is the same as 
             # self.file name with an 'analyzed' added
+            #if output_dir == None:
+            #    new_book.save(self.__strip_excel()+"_analyzed.xls")
+            #elif output_dir == str:
+            #    new_book.save(output_dir+"/"+self.__strip_excel()+"_analyzed.xls")
+            #else:
             new_book.save(self.__strip_excel()+"_analyzed.xls")
+
     
     def __strip_excel(self):
         """ Called to strip the .xls extension from self.filename
