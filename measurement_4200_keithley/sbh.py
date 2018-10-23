@@ -231,7 +231,7 @@ class SBH:
             data_sheet.cell(column=i, row=1, value=headers[i-1])
         count = 1
         for val in data_dict.itervalues():
-            for i in range(2):
+            for i in range(len(self.measurements)):
                 data_sheet.cell(column=count, row=i+2, value=val[i])
             count += 1
         # fill the voltage sheet

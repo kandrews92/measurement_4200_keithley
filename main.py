@@ -90,7 +90,7 @@ def main():
     # access each measurement through m[0], m[1],..., m[len(file)-1]
     # this is initialized with default values, such as length, width,
     # capacitance, and threshold voltage. 
-    m = [ Measurement(file) for file in files ]
+    #m = [ Measurement(file) for file in files ]
 
     # set device parameters
     L = 5.2        # [micrometers]
@@ -99,9 +99,8 @@ def main():
     Vth = -2.5          # [Volts]
     # create list of instances with non-default values in the 
     # constructor
-    n = [ Measurement(file, length=L, width=W, capacitance=C, \
-           threshold_voltage=Vth) for file in files ]
-    
+    n = [ Measurement(file) for file in files ]
+    """
     # use of __str__ or __repr__ overloading
     for item in n: print item
     
@@ -125,11 +124,16 @@ def main():
     # write the analysis of each of the files 
     for item in n:
         item.write_analysis() # output is in data/
+    """
+    # create an instance of SBH class 
+    # pass it a list of measurements
+    x = SBH(n)
 
+    # show the temperatures
+    print x.get_temperatures() # sorted in descending order
 
-
-    # TODO: 
-    # add examples using SBH class
+    # write analysis of SBH 
+    x.write_analysis()
 
 if __name__ == "__main__":
     main()
